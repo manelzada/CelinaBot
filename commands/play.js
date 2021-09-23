@@ -1,32 +1,65 @@
 const discord = require('discord.js');
-const conn = require('./conn.var.js');
 const ytdl = require('ytdl-core');
-const dispatcher = require('./dispatcher.var.js');
+
+const canais = {
+  'canal': {
+    connection: null,
+    dispatcher: null,
+    fila: [],
+    isTocando: false
+  }
+}
+
+const queue = () => {
+  if (canais.canal.isTocando === false) {
+    const tocando = canais.canal.fila[0];
+    canais.canal.isTocando = true;
+    canais.canal.dispatcher = canais.canal.connection.play(ytdl(tocando, { filter: "audioonly" }));
+
+    canais.canal.dispatcher.on('finish', () => {
+      canais.canal.fila.shift();
+      canais.canal.isTocando = false;
+      if (canais.canal.fila.length > 0) {
+        console.log("veio até aqui 2");
+        queue();
+      } else {
+        canais.canal.dispatcher = null;
+        console.log("Acabou");
+      }
+    });
+  }
+}
 
 module.exports = async function mainFunction(client, msg, args) {
   let channel = msg.channel;
+  // -------------------- Join
 
   if (msg.member.voice.channel) {
     try {
-      conn.conn = await msg.member.voice.channel.join();
+      canais.canal.connection = await msg.member.voice.channel.join();
     } catch (err) {
       console.log(err);
       try {
-        conn.conn.disconnect();
+        canais.canal.connection.disconnect();
         msg.reply("Não consegui me conectar :(...");
-      } catch { };
+      } catch (err) {
+        console.log(err);
+      };
     };
   } else {
     msg.reply('Você precisa estar em um canal de voz!!');
-  }
+  } // Fim Join
 
-  if (args.length < 2) { msg.reply("Modo de uso: c!play <link>"); return; };
 
-  try {
-    dispatcher.dis = conn.conn.play(ytdl(args[1] ? args[1] : args[2], { filter: "audioonly" }));
-    msg.reply("Tocando...")
-  } catch (err) {
-    msg.reply("Não consegui tocar a música, verifique se eu estou num canal de voz.");
-    console.log(err);
+  if (args.length < 2) {
+    msg.reply("Modo de uso: c!play <link>");
+    return;
   };
+
+  // -------------------- Play
+  canais.canal.fila.push(args[1]);
+  console.log(`Adicionado: ${args[1]}`);
+  msg.reply(" 🎵  Adicionada"); // Fim Play
+  console.log(canais.canal.fila);
+  queue();
 };
